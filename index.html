@@ -90,7 +90,7 @@ button:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 <tr><td>Duration</td><td id="r-duration"></td></tr>
 <tr><td>Average speed</td><td id="r-avg"></td></tr>
 <tr><td>Peak speed</td><td id="r-peak"></td></tr>
-<tr><td>Server</td><td>GitHub (objects.githubusercontent.com)</td></tr>
+<tr><td>Server</td><td>GitHub Pages (fernandogracias.github.io)</td></tr>
 </table>
 
 <div class="note">
@@ -101,31 +101,8 @@ button:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
 
 <script>
 (function() {
-    var REPO = "FernandoGracias/speedtest";
-    var FILE_SIZE = 104857600; // 100MB - will be updated after fetching release info
-    var downloadUrl = "";
-
-    // Fetch the latest release to get the download URL
-    function getDownloadUrl(callback) {
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "https://api.github.com/repos/" + REPO + "/releases/latest", true);
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                var release = JSON.parse(xhr.responseText);
-                if (release.assets && release.assets.length > 0) {
-                    downloadUrl = release.assets[0].browser_download_url;
-                    FILE_SIZE = release.assets[0].size;
-                    callback(null);
-                } else {
-                    callback("No release assets found");
-                }
-            } else {
-                callback("Failed to fetch release info: " + xhr.status);
-            }
-        };
-        xhr.onerror = function() { callback("Network error fetching release info"); };
-        xhr.send();
-    }
+    var FILE_SIZE = 52428800; // 50MB
+    var FILE_URL = "data.bin";
 
     document.getElementById("btn").addEventListener("click", function() {
         var btn = document.getElementById("btn");
@@ -138,8 +115,8 @@ button:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
         var resultsTable = document.getElementById("results");
 
         btn.disabled = true;
-        btn.textContent = "Preparing...";
-        status.textContent = "Fetching test file info...";
+        btn.textContent = "Testing...";
+        status.textContent = "Downloading 50MB test file...";
         speedEl.textContent = "...";
         progressBar.style.width = "0%";
         downloadedEl.textContent = "";
@@ -147,89 +124,77 @@ button:disabled { background: #2a2a3a; color: #555; cursor: not-allowed; }
         avgEl.textContent = "";
         resultsTable.style.display = "none";
 
-        getDownloadUrl(function(err) {
-            if (err) {
-                status.textContent = "Error: " + err;
-                btn.disabled = false;
-                btn.textContent = "Retry";
-                return;
+        var startTime = performance.now();
+        var lastLoaded = 0;
+        var lastTime = startTime;
+        var samples = [];
+        var peakSpeed = 0;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", FILE_URL + "?cb=" + Date.now(), true);
+        xhr.responseType = "arraybuffer";
+
+        xhr.onprogress = function(e) {
+            var now = performance.now();
+            var loaded = e.loaded;
+            var intervalBytes = loaded - lastLoaded;
+            var intervalTime = (now - lastTime) / 1000;
+
+            if (intervalTime > 0.3) {
+                var instantMbps = (intervalBytes * 8) / (intervalTime * 1000000);
+                samples.push(instantMbps);
+                if (instantMbps > peakSpeed) peakSpeed = instantMbps;
+
+                var recent = samples.slice(-5);
+                var sum = 0;
+                for (var i = 0; i < recent.length; i++) sum += recent[i];
+                var currentSpeed = sum / recent.length;
+                speedEl.textContent = currentSpeed.toFixed(1);
+
+                lastLoaded = loaded;
+                lastTime = now;
             }
 
-            status.textContent = "Downloading " + (FILE_SIZE / 1048576).toFixed(0) + "MB test file...";
-            btn.textContent = "Testing...";
+            var pct = (loaded / FILE_SIZE * 100);
+            progressBar.style.width = pct.toFixed(1) + "%";
+            downloadedEl.textContent = (loaded / 1048576).toFixed(1) + " MB / " + (FILE_SIZE / 1048576).toFixed(0) + " MB";
+            elapsedEl.textContent = ((now - startTime) / 1000).toFixed(1) + "s elapsed";
 
-            var startTime = performance.now();
-            var lastLoaded = 0;
-            var lastTime = startTime;
-            var samples = [];
-            var peakSpeed = 0;
+            var avgMbps = (loaded * 8) / ((now - startTime) / 1000) / 1000000;
+            avgEl.textContent = "Average: " + avgMbps.toFixed(1) + " Mbps";
+        };
 
-            var xhr2 = new XMLHttpRequest();
-            xhr2.open("GET", downloadUrl + "?cb=" + Date.now(), true);
-            xhr2.responseType = "arraybuffer";
+        xhr.onload = function() {
+            var endTime = performance.now();
+            var totalSeconds = (endTime - startTime) / 1000;
+            var avgMbps = (FILE_SIZE * 8) / (totalSeconds * 1000000);
 
-            xhr2.onprogress = function(e) {
-                var now = performance.now();
-                var loaded = e.loaded;
-                var intervalBytes = loaded - lastLoaded;
-                var intervalTime = (now - lastTime) / 1000;
+            speedEl.textContent = avgMbps.toFixed(1);
+            status.textContent = "Complete";
+            progressBar.style.width = "100%";
+            downloadedEl.textContent = (FILE_SIZE / 1048576).toFixed(0) + " MB downloaded";
+            elapsedEl.textContent = totalSeconds.toFixed(1) + "s total";
+            avgEl.textContent = "Average: " + avgMbps.toFixed(1) + " Mbps";
 
-                if (intervalTime > 0.3) {
-                    var instantMbps = (intervalBytes * 8) / (intervalTime * 1000000);
-                    samples.push(instantMbps);
-                    if (instantMbps > peakSpeed) peakSpeed = instantMbps;
+            // Show results table
+            document.getElementById("r-size").textContent = (FILE_SIZE / 1048576).toFixed(0) + " MB";
+            document.getElementById("r-duration").textContent = totalSeconds.toFixed(1) + "s";
+            document.getElementById("r-avg").textContent = avgMbps.toFixed(1) + " Mbps";
+            document.getElementById("r-peak").textContent = peakSpeed.toFixed(1) + " Mbps";
+            resultsTable.style.display = "table";
 
-                    var recent = samples.slice(-5);
-                    var sum = 0;
-                    for (var i = 0; i < recent.length; i++) sum += recent[i];
-                    var currentSpeed = sum / recent.length;
-                    speedEl.textContent = currentSpeed.toFixed(1);
+            btn.disabled = false;
+            btn.textContent = "Test Again";
+        };
 
-                    lastLoaded = loaded;
-                    lastTime = now;
-                }
+        xhr.onerror = function() {
+            status.textContent = "Error - download failed";
+            speedEl.textContent = "\u2014";
+            btn.disabled = false;
+            btn.textContent = "Retry";
+        };
 
-                var pct = (loaded / FILE_SIZE * 100);
-                progressBar.style.width = pct.toFixed(1) + "%";
-                downloadedEl.textContent = (loaded / 1048576).toFixed(1) + " MB / " + (FILE_SIZE / 1048576).toFixed(0) + " MB";
-                elapsedEl.textContent = ((now - startTime) / 1000).toFixed(1) + "s elapsed";
-
-                var avgMbps = (loaded * 8) / ((now - startTime) / 1000) / 1000000;
-                avgEl.textContent = "Average: " + avgMbps.toFixed(1) + " Mbps";
-            };
-
-            xhr2.onload = function() {
-                var endTime = performance.now();
-                var totalSeconds = (endTime - startTime) / 1000;
-                var avgMbps = (FILE_SIZE * 8) / (totalSeconds * 1000000);
-
-                speedEl.textContent = avgMbps.toFixed(1);
-                status.textContent = "Complete";
-                progressBar.style.width = "100%";
-                downloadedEl.textContent = (FILE_SIZE / 1048576).toFixed(0) + " MB downloaded";
-                elapsedEl.textContent = totalSeconds.toFixed(1) + "s total";
-                avgEl.textContent = "Average: " + avgMbps.toFixed(1) + " Mbps";
-
-                // Show results table
-                document.getElementById("r-size").textContent = (FILE_SIZE / 1048576).toFixed(0) + " MB";
-                document.getElementById("r-duration").textContent = totalSeconds.toFixed(1) + "s";
-                document.getElementById("r-avg").textContent = avgMbps.toFixed(1) + " Mbps";
-                document.getElementById("r-peak").textContent = peakSpeed.toFixed(1) + " Mbps";
-                resultsTable.style.display = "table";
-
-                btn.disabled = false;
-                btn.textContent = "Test Again";
-            };
-
-            xhr2.onerror = function() {
-                status.textContent = "Error - download failed";
-                speedEl.textContent = "—";
-                btn.disabled = false;
-                btn.textContent = "Retry";
-            };
-
-            xhr2.send();
-        });
+        xhr.send();
     });
 })();
 </script>
