@@ -149,8 +149,8 @@ body {
 .graph-container {
     position: absolute;
     bottom: 60px;
-    left: 20px;
-    right: 20px;
+    left: 0;
+    right: 0;
     height: 120px;
     z-index: 10;
     pointer-events: none;
@@ -243,13 +243,13 @@ body {
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="coastlines.js"></script>
 <script>
 (function() {
 
 // ============ GLOBE ============
 var scene, camera, renderer, globe, arcGroup, controls;
 var userLat = null, userLon = null;
-var serverLat = 37.7749, serverLon = -122.4194; // GitHub Pages CDN - SF area
 var arcMeshes = [];
 var mouseDown = false, mouseX = 0, mouseY = 0;
 var rotationX = 0.3, rotationY = 0;
@@ -269,23 +269,23 @@ function initGlobe() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
 
-    // Globe sphere with wireframe
+    // Globe sphere
     var globeGeo = new THREE.SphereGeometry(1, 64, 64);
     var globeMat = new THREE.MeshBasicMaterial({
-        color: 0x0a1628,
+        color: 0x070d1a,
         transparent: true,
-        opacity: 0.6
+        opacity: 0.8
     });
     globe = new THREE.Mesh(globeGeo, globeMat);
     scene.add(globe);
 
-    // Wireframe overlay
-    var wireGeo = new THREE.SphereGeometry(1.002, 36, 18);
+    // Subtle lat/lon grid
+    var wireGeo = new THREE.SphereGeometry(1.001, 36, 18);
     var wireMat = new THREE.MeshBasicMaterial({
-        color: 0x0044aa,
+        color: 0x003366,
         wireframe: true,
         transparent: true,
-        opacity: 0.15
+        opacity: 0.08
     });
     var wire = new THREE.Mesh(wireGeo, wireMat);
     globe.add(wire);
@@ -295,11 +295,14 @@ function initGlobe() {
     var glowMat = new THREE.MeshBasicMaterial({
         color: 0x0066cc,
         transparent: true,
-        opacity: 0.05,
+        opacity: 0.04,
         side: THREE.BackSide
     });
     var glow = new THREE.Mesh(glowGeo, glowMat);
     globe.add(glow);
+
+    // Draw coastlines
+    drawCoastlines();
 
     // Arc group
     arcGroup = new THREE.Group();
@@ -339,6 +342,27 @@ function initGlobe() {
     animate();
 }
 
+function drawCoastlines() {
+    if (typeof COASTLINES === 'undefined') return;
+    var material = new THREE.LineBasicMaterial({
+        color: 0x1a6b8a,
+        transparent: true,
+        opacity: 0.5
+    });
+    for (var i = 0; i < COASTLINES.length; i++) {
+        var line = COASTLINES[i];
+        var points = [];
+        for (var j = 0; j < line.length; j++) {
+            var lon = line[j][0];
+            var lat = line[j][1];
+            points.push(latLonToVec3(lat, lon, 1.003));
+        }
+        var geometry = new THREE.BufferGeometry().setFromPoints(points);
+        var mesh = new THREE.Line(geometry, material);
+        globe.add(mesh);
+    }
+}
+
 function latLonToVec3(lat, lon, radius) {
     var phi = (90 - lat) * Math.PI / 180;
     var theta = (lon + 180) * Math.PI / 180;
@@ -366,45 +390,15 @@ function addLocationDot(lat, lon, color) {
     globe.add(ring);
 }
 
-function createArc(startLat, startLon, endLat, endLon) {
-    var start = latLonToVec3(startLat, startLon, 1.0);
-    var end = latLonToVec3(endLat, endLon, 1.0);
-
-    var mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
-    var dist = start.distanceTo(end);
-    mid.normalize().multiplyScalar(1.0 + dist * 0.4);
-
-    var curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-    var points = curve.getPoints(60);
-    var geometry = new THREE.BufferGeometry().setFromPoints(points);
-    var material = new THREE.LineBasicMaterial({
-        color: 0x00ccff,
-        transparent: true,
-        opacity: 0.0
-    });
-    var arc = new THREE.Line(geometry, material);
-    arcGroup.add(arc);
-    return { arc: arc, material: material, points: points, progress: 0 };
-}
-
 var activeArcs = [];
 var arcAnimating = false;
 
 function startArcAnimation() {
     arcAnimating = true;
-    if (userLat === null) return;
-
-    // Clear old arcs
-    activeArcs.forEach(function(a) { arcGroup.remove(a.arc); });
-    activeArcs = [];
-
-    var arcData = createArc(userLat, userLon, serverLat, serverLon);
-    activeArcs.push(arcData);
 }
 
 function stopArcAnimation() {
     arcAnimating = false;
-    activeArcs.forEach(function(a) { a.material.opacity = 0; });
 }
 
 function animate() {
@@ -420,13 +414,9 @@ function animate() {
     globe.rotation.x = rotationX;
     globe.rotation.y = rotationY;
 
-    // Animate arcs
-    if (arcAnimating) {
-        activeArcs.forEach(function(a) {
-            a.progress += 0.02;
-            if (a.progress > 1) a.progress = 0;
-            a.material.opacity = 0.6 + Math.sin(a.progress * Math.PI) * 0.4;
-        });
+    // Animate user dot pulse when testing
+    if (arcAnimating && globe) {
+        globe.rotation.y += 0.0005; // subtle extra rotation during test
     }
 
     renderer.render(scene, camera);
@@ -529,9 +519,8 @@ function getLocation() {
         document.getElementById('location-text').textContent =
             userLat.toFixed(2) + ', ' + userLon.toFixed(2);
 
-        // Add dots to globe
+        // Add user location dot only
         addLocationDot(userLat, userLon, 0x00ff88);
-        addLocationDot(serverLat, serverLon, 0x00aaff);
 
         // Rotate globe to show user location
         var targetY = -userLon * Math.PI / 180 - Math.PI;
@@ -541,7 +530,6 @@ function getLocation() {
         setTimeout(function() { autoRotate = true; }, 3000);
     }, function() {
         document.getElementById('location-text').textContent = 'Location denied';
-        addLocationDot(serverLat, serverLon, 0x00aaff);
     });
 }
 
