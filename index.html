@@ -71,7 +71,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: -60px;
+    margin-top: -20px;
 }
 
 .speed-display {
@@ -148,10 +148,10 @@ body {
 
 .graph-container {
     position: absolute;
-    bottom: 60px;
+    bottom: 44px;
     left: 0;
     right: 0;
-    height: 120px;
+    height: 160px;
     z-index: 10;
     pointer-events: none;
 }
@@ -163,7 +163,7 @@ body {
 
 .stats-row {
     position: absolute;
-    bottom: 20px;
+    bottom: 8px;
     left: 20px;
     right: 20px;
     display: flex;
@@ -425,7 +425,7 @@ function animate() {
 // ============ GRAPH ============
 var graphCanvas, graphCtx;
 var graphData = [];
-var maxGraphPoints = 100;
+var maxGraphPoints = 50; // 12s test / ~0.25s per sample
 
 function initGraph() {
     graphCanvas = document.getElementById('graph');
@@ -536,7 +536,7 @@ function getLocation() {
 // ============ SPEED TEST ============
 var FILE_URL = "data.bin";
 var TEST_DURATION = 12000; // 12 seconds
-var SAMPLE_INTERVAL = 0.25; // sample every 250ms
+var SAMPLE_INTERVAL = 0.4; // sample every 400ms for smoother graph
 
 document.getElementById("btn").addEventListener("click", function() {
     var btn = document.getElementById("btn");
@@ -599,14 +599,21 @@ document.getElementById("btn").addEventListener("click", function() {
 
             if (instantMbps > 0 || samples.length > 0) {
                 samples.push(instantMbps);
-                graphData.push(instantMbps);
+
+                // Smooth for graph: average of last 3 raw samples
+                var graphSmooth = samples.slice(-3);
+                var graphSum = 0;
+                for (var i = 0; i < graphSmooth.length; i++) graphSum += graphSmooth[i];
+                var smoothedPoint = graphSum / graphSmooth.length;
+                graphData.push(smoothedPoint);
                 if (graphData.length > maxGraphPoints) graphData.shift();
                 drawGraph();
 
                 if (instantMbps > peakSpeed) peakSpeed = instantMbps;
-                if (instantMbps < lowSpeed && samples.length > 3) lowSpeed = instantMbps;
+                if (instantMbps < lowSpeed && samples.length > 4) lowSpeed = instantMbps;
 
-                var recent = samples.slice(-8);
+                // Display: rolling average of last 5 samples
+                var recent = samples.slice(-5);
                 var sum = 0;
                 for (var i = 0; i < recent.length; i++) sum += recent[i];
                 var currentSpeed = sum / recent.length;
