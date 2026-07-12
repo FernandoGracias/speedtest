@@ -178,30 +178,7 @@ body {
 .stat-item .stat-value { font-size: 14px; color: #aaa; font-weight: 600; margin-bottom: 2px; font-family: 'SF Mono', monospace; }
 .stat-item .stat-label { color: #444; text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
 
-.progress-ring {
-    position: absolute;
-    width: 200px;
-    height: 200px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.5s;
-}
 
-.progress-ring.active { opacity: 1; }
-
-.progress-ring svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-}
-
-.progress-ring circle {
-    fill: none;
-    stroke-width: 2;
-}
-
-.progress-ring .bg { stroke: rgba(0, 100, 180, 0.1); }
-.progress-ring .fg { stroke: #00aaff; stroke-linecap: round; transition: stroke-dashoffset 0.3s ease; }
 </style>
 </head>
 <body>
@@ -215,13 +192,6 @@ body {
     </div>
 
     <div class="center-panel">
-        <div class="progress-ring" id="progress-ring">
-            <svg viewBox="0 0 200 200">
-                <circle class="bg" cx="100" cy="100" r="90"/>
-                <circle class="fg" id="progress-circle" cx="100" cy="100" r="90" 
-                    stroke-dasharray="565.48" stroke-dashoffset="565.48"/>
-            </svg>
-        </div>
         <div class="speed-display">
             <div class="speed-value idle" id="speed">GO</div>
             <div class="speed-unit" id="speed-unit"></div>
@@ -536,7 +506,7 @@ function getLocation() {
 
 // ============ SPEED TEST ============
 var FILE_URL = "https://pub-ea992c813d5f421bba5c8462875eda20.r2.dev/testdata.bin";
-var TEST_DURATION = 12300; // 12s + buffer to ensure all 48 samples fire
+var TEST_DURATION = 12000; // 12 seconds from first byte
 var SAMPLE_INTERVAL = 0.25; // 48 samples over 12s = full screen width
 
 document.getElementById("btn").addEventListener("click", function() {
@@ -545,8 +515,6 @@ document.getElementById("btn").addEventListener("click", function() {
     var speedUnit = document.getElementById("speed-unit");
     var statusEl = document.getElementById("status");
     var statsRow = document.getElementById("stats-row");
-    var progressRing = document.getElementById("progress-ring");
-    var progressCircle = document.getElementById("progress-circle");
 
     btn.disabled = true;
     btn.classList.add("testing");
@@ -557,13 +525,9 @@ document.getElementById("btn").addEventListener("click", function() {
     statusEl.textContent = "Measuring speed...";
     statusEl.classList.add("active");
     statsRow.style.opacity = "0";
-    progressRing.classList.add("active");
 
     graphData = [];
     drawGraph();
-    startArcAnimation();
-
-    var circumference = 2 * Math.PI * 90;
     var testStartTime = performance.now();
     var totalBytes = 0;
     var samples = [];
@@ -573,6 +537,7 @@ document.getElementById("btn").addEventListener("click", function() {
     var lastSampleTime = testStartTime;
     var lastSampleBytes = 0;
     var xhr = null;
+    var firstByteReceived = false;
 
     function takeSample() {
         if (finished) return;
@@ -609,11 +574,8 @@ document.getElementById("btn").addEventListener("click", function() {
             lastSampleTime = now;
         }
 
-        // Update progress ring and countdown
+        // Update countdown
         var elapsed = now - testStartTime;
-        var pct = Math.min(elapsed / TEST_DURATION, 1);
-        var offset = circumference * (1 - pct);
-        progressCircle.style.strokeDashoffset = offset;
         var remaining = Math.ceil((TEST_DURATION - elapsed) / 1000);
         if (remaining > 0) {
             statusEl.textContent = "Measuring speed... " + remaining + "s";
@@ -636,9 +598,6 @@ document.getElementById("btn").addEventListener("click", function() {
         btn.disabled = false;
         btn.classList.remove("testing");
         btn.textContent = "GO";
-        progressRing.classList.remove("active");
-        progressCircle.style.strokeDashoffset = "0";
-        stopArcAnimation();
 
         var totalMB = (totalBytes / 1048576).toFixed(0);
         document.getElementById("stat-peak").textContent = peakSpeed.toFixed(1) + " Mbps";
@@ -657,6 +616,12 @@ document.getElementById("btn").addEventListener("click", function() {
         var streamBytes = 0;
 
         xhr.onprogress = function(e) {
+            if (!firstByteReceived) {
+                firstByteReceived = true;
+                testStartTime = performance.now();
+                lastSampleTime = testStartTime;
+                setTimeout(finishTest, TEST_DURATION);
+            }
             var newBytes = e.loaded - streamBytes;
             totalBytes += newBytes;
             streamBytes = e.loaded;
@@ -677,8 +642,6 @@ document.getElementById("btn").addEventListener("click", function() {
                 btn.disabled = false;
                 btn.classList.remove("testing");
                 btn.textContent = "GO";
-                progressRing.classList.remove("active");
-                stopArcAnimation();
                 finished = true;
             }
         };
@@ -687,9 +650,6 @@ document.getElementById("btn").addEventListener("click", function() {
     }
 
     startDownload();
-
-    // End test after TEST_DURATION
-    setTimeout(finishTest, TEST_DURATION);
 
     // Smooth progress updates
     var progressInterval = setInterval(function() {
