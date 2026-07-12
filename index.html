@@ -164,19 +164,30 @@ body {
 .stats-row {
     position: absolute;
     bottom: 8px;
-    left: 20px;
-    right: 20px;
+    left: 10px;
+    right: 10px;
     display: flex;
     justify-content: space-around;
     font-size: 11px;
     color: #555;
     z-index: 10;
     pointer-events: none;
+    flex-wrap: wrap;
+    gap: 4px 0;
 }
 
-.stat-item { text-align: center; }
-.stat-item .stat-value { font-size: 14px; color: #aaa; font-weight: 600; margin-bottom: 2px; font-family: 'SF Mono', monospace; }
+.stat-item { text-align: center; flex: 1; min-width: 0; }
+.stat-item .stat-value { font-size: 14px; color: #aaa; font-weight: 600; margin-bottom: 2px; font-family: 'SF Mono', monospace; white-space: nowrap; }
 .stat-item .stat-label { color: #444; text-transform: uppercase; font-size: 9px; letter-spacing: 1px; }
+
+@media (max-width: 480px) {
+    .stats-row { bottom: 4px; left: 5px; right: 5px; }
+    .stat-item .stat-value { font-size: 12px; }
+    .stat-item .stat-label { font-size: 8px; letter-spacing: 0.5px; }
+    .speed-value { font-size: 64px; }
+    .top-bar { padding: 10px 12px; }
+    .graph-container { height: 130px; bottom: 36px; }
+}
 
 
 </style>
