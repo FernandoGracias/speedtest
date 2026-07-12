@@ -469,17 +469,19 @@ function drawGraph() {
     gradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)');
     gradient.addColorStop(1, 'rgba(0, 100, 200, 0.2)');
 
+    var totalPoints = 24; // 12s / 0.5s
+    var step = w / (totalPoints - 1);
+
     graphCtx.beginPath();
     graphCtx.moveTo(0, h);
 
     for (var i = 0; i < graphData.length; i++) {
-        var x = (i / (graphData.length - 1)) * w;
+        var x = i * step;
         var y = h - (graphData[i] / maxVal) * h;
-        if (i === 0) graphCtx.lineTo(x, y);
-        else graphCtx.lineTo(x, y);
+        graphCtx.lineTo(x, y);
     }
 
-    graphCtx.lineTo((graphData.length - 1) / (graphData.length - 1) * w, h);
+    graphCtx.lineTo((graphData.length - 1) * step, h);
     graphCtx.closePath();
     graphCtx.fillStyle = gradient;
     graphCtx.fill();
@@ -487,7 +489,7 @@ function drawGraph() {
     // Line on top
     graphCtx.beginPath();
     for (var i = 0; i < graphData.length; i++) {
-        var x = (i / (graphData.length - 1)) * w;
+        var x = i * step;
         var y = h - (graphData[i] / maxVal) * h;
         if (i === 0) graphCtx.moveTo(x, y);
         else graphCtx.lineTo(x, y);
@@ -498,7 +500,7 @@ function drawGraph() {
 
     // Peak marker
     var peakIdx = graphData.indexOf(Math.max.apply(null, graphData));
-    var peakX = (peakIdx / (graphData.length - 1)) * w;
+    var peakX = peakIdx * step;
     var peakY = h - (graphData[peakIdx] / maxVal) * h;
     graphCtx.beginPath();
     graphCtx.arc(peakX, peakY, 3, 0, Math.PI * 2);
