@@ -34,10 +34,11 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     height: 100%;
     width: 100%;
     pointer-events: none;
+    padding-top: 15vh;
 }
 
 .overlay > * { pointer-events: auto; }
@@ -71,7 +72,6 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: -20px;
 }
 
 .speed-display {
@@ -425,7 +425,6 @@ function animate() {
 // ============ GRAPH ============
 var graphCanvas, graphCtx;
 var graphData = [];
-var maxGraphPoints = 50; // 12s test / ~0.25s per sample
 
 function initGraph() {
     graphCanvas = document.getElementById('graph');
@@ -474,13 +473,13 @@ function drawGraph() {
     graphCtx.moveTo(0, h);
 
     for (var i = 0; i < graphData.length; i++) {
-        var x = (i / (maxGraphPoints - 1)) * w;
+        var x = (i / (graphData.length - 1)) * w;
         var y = h - (graphData[i] / maxVal) * h;
         if (i === 0) graphCtx.lineTo(x, y);
         else graphCtx.lineTo(x, y);
     }
 
-    graphCtx.lineTo((graphData.length - 1) / (maxGraphPoints - 1) * w, h);
+    graphCtx.lineTo((graphData.length - 1) / (graphData.length - 1) * w, h);
     graphCtx.closePath();
     graphCtx.fillStyle = gradient;
     graphCtx.fill();
@@ -488,7 +487,7 @@ function drawGraph() {
     // Line on top
     graphCtx.beginPath();
     for (var i = 0; i < graphData.length; i++) {
-        var x = (i / (maxGraphPoints - 1)) * w;
+        var x = (i / (graphData.length - 1)) * w;
         var y = h - (graphData[i] / maxVal) * h;
         if (i === 0) graphCtx.moveTo(x, y);
         else graphCtx.lineTo(x, y);
@@ -499,7 +498,7 @@ function drawGraph() {
 
     // Peak marker
     var peakIdx = graphData.indexOf(Math.max.apply(null, graphData));
-    var peakX = (peakIdx / (maxGraphPoints - 1)) * w;
+    var peakX = (peakIdx / (graphData.length - 1)) * w;
     var peakY = h - (graphData[peakIdx] / maxVal) * h;
     graphCtx.beginPath();
     graphCtx.arc(peakX, peakY, 3, 0, Math.PI * 2);
@@ -536,7 +535,7 @@ function getLocation() {
 // ============ SPEED TEST ============
 var FILE_URL = "https://pub-ea992c813d5f421bba5c8462875eda20.r2.dev/testdata.bin";
 var TEST_DURATION = 12000; // 12 seconds
-var SAMPLE_INTERVAL = 0.4; // sample every 400ms
+var SAMPLE_INTERVAL = 0.5; // 24 samples over 12s = full screen width
 
 document.getElementById("btn").addEventListener("click", function() {
     var btn = document.getElementById("btn");
@@ -591,7 +590,6 @@ document.getElementById("btn").addEventListener("click", function() {
                 for (var i = 0; i < graphSmooth.length; i++) graphSum += graphSmooth[i];
                 var smoothedPoint = graphSum / graphSmooth.length;
                 graphData.push(smoothedPoint);
-                if (graphData.length > maxGraphPoints) graphData.shift();
                 drawGraph();
 
                 if (instantMbps > peakSpeed) peakSpeed = instantMbps;
