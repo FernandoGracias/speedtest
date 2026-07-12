@@ -506,8 +506,7 @@ function getLocation() {
 
 // ============ SPEED TEST ============
 var FILE_URL = "https://pub-ea992c813d5f421bba5c8462875eda20.r2.dev/testdata.bin";
-var TEST_DURATION = 12000; // 12 seconds from first byte
-var SAMPLE_INTERVAL = 0.25; // 48 samples over 12s = full screen width
+var SAMPLE_INTERVAL = 0.25; // 4 samples/sec, 48 total = ~12s test
 
 document.getElementById("btn").addEventListener("click", function() {
     var btn = document.getElementById("btn");
@@ -539,6 +538,8 @@ document.getElementById("btn").addEventListener("click", function() {
     var xhr = null;
     var firstByteReceived = false;
 
+    var TOTAL_SAMPLES = 48;
+
     function takeSample() {
         if (finished) return;
         var now = performance.now();
@@ -568,6 +569,12 @@ document.getElementById("btn").addEventListener("click", function() {
                 for (var i = 0; i < recent.length; i++) sum += recent[i];
                 var currentSpeed = sum / recent.length;
                 speedEl.textContent = currentSpeed.toFixed(1);
+
+                // End test when all samples collected
+                if (graphData.length >= TOTAL_SAMPLES) {
+                    finishTest();
+                    return;
+                }
             }
 
             lastSampleBytes = totalBytes;
@@ -575,8 +582,7 @@ document.getElementById("btn").addEventListener("click", function() {
         }
 
         // Update countdown
-        var elapsed = now - testStartTime;
-        var remaining = Math.ceil((TEST_DURATION - elapsed) / 1000);
+        var remaining = Math.ceil((TOTAL_SAMPLES - graphData.length) * SAMPLE_INTERVAL);
         if (remaining > 0) {
             statusEl.textContent = "Measuring speed... " + remaining + "s";
         }
@@ -620,7 +626,6 @@ document.getElementById("btn").addEventListener("click", function() {
                 firstByteReceived = true;
                 testStartTime = performance.now();
                 lastSampleTime = testStartTime;
-                setTimeout(finishTest, TEST_DURATION);
             }
             var newBytes = e.loaded - streamBytes;
             totalBytes += newBytes;
