@@ -469,7 +469,7 @@ function drawGraph() {
     gradient.addColorStop(0, 'rgba(0, 200, 255, 0.8)');
     gradient.addColorStop(1, 'rgba(0, 100, 200, 0.2)');
 
-    var totalPoints = 24; // 12s / 0.5s
+    var totalPoints = 48; // 12s / 0.25s
     var step = w / (totalPoints - 1);
 
     graphCtx.beginPath();
@@ -537,7 +537,7 @@ function getLocation() {
 // ============ SPEED TEST ============
 var FILE_URL = "https://pub-ea992c813d5f421bba5c8462875eda20.r2.dev/testdata.bin";
 var TEST_DURATION = 12000; // 12 seconds
-var SAMPLE_INTERVAL = 0.5; // 24 samples over 12s = full screen width
+var SAMPLE_INTERVAL = 0.25; // 48 samples over 12s = full screen width
 
 document.getElementById("btn").addEventListener("click", function() {
     var btn = document.getElementById("btn");
