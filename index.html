@@ -534,9 +534,9 @@ function getLocation() {
 }
 
 // ============ SPEED TEST ============
-var FILE_URL = "data.bin";
+var FILE_URL = "https://pub-ea992c813d5f421bba5c8462875eda20.r2.dev/testdata.bin";
 var TEST_DURATION = 12000; // 12 seconds
-var SAMPLE_INTERVAL = 0.4; // sample every 400ms for smoother graph
+var SAMPLE_INTERVAL = 0.4; // sample every 400ms
 
 document.getElementById("btn").addEventListener("click", function() {
     var btn = document.getElementById("btn");
@@ -564,29 +564,14 @@ document.getElementById("btn").addEventListener("click", function() {
 
     var circumference = 2 * Math.PI * 90;
     var testStartTime = performance.now();
-    var totalBytesDownloaded = 0;
+    var totalBytes = 0;
     var samples = [];
     var peakSpeed = 0;
     var lowSpeed = Infinity;
-    var activeXHRs = [];
     var finished = false;
     var lastSampleTime = testStartTime;
     var lastSampleBytes = 0;
-    var concurrentStreams = 4;
-
-    function updateProgress() {
-        if (finished) return;
-        var now = performance.now();
-        var elapsed = now - testStartTime;
-        var pct = Math.min(elapsed / TEST_DURATION, 1);
-        var offset = circumference * (1 - pct);
-        progressCircle.style.strokeDashoffset = offset;
-
-        var remaining = Math.ceil((TEST_DURATION - elapsed) / 1000);
-        if (remaining > 0) {
-            statusEl.textContent = "Measuring speed... " + remaining + "s";
-        }
-    }
+    var xhr = null;
 
     function takeSample() {
         if (finished) return;
@@ -594,7 +579,7 @@ document.getElementById("btn").addEventListener("click", function() {
         var intervalTime = (now - lastSampleTime) / 1000;
 
         if (intervalTime >= SAMPLE_INTERVAL) {
-            var intervalBytes = totalBytesDownloaded - lastSampleBytes;
+            var intervalBytes = totalBytes - lastSampleBytes;
             var instantMbps = (intervalBytes * 8) / (intervalTime * 1000000);
 
             if (instantMbps > 0 || samples.length > 0) {
@@ -620,24 +605,30 @@ document.getElementById("btn").addEventListener("click", function() {
                 speedEl.textContent = currentSpeed.toFixed(1);
             }
 
-            lastSampleBytes = totalBytesDownloaded;
+            lastSampleBytes = totalBytes;
             lastSampleTime = now;
         }
 
-        updateProgress();
+        // Update progress ring and countdown
+        var elapsed = now - testStartTime;
+        var pct = Math.min(elapsed / TEST_DURATION, 1);
+        var offset = circumference * (1 - pct);
+        progressCircle.style.strokeDashoffset = offset;
+        var remaining = Math.ceil((TEST_DURATION - elapsed) / 1000);
+        if (remaining > 0) {
+            statusEl.textContent = "Measuring speed... " + remaining + "s";
+        }
     }
 
     function finishTest() {
         if (finished) return;
         finished = true;
 
-        // Abort any ongoing XHRs
-        activeXHRs.forEach(function(x) { x.abort(); });
-        activeXHRs = [];
+        if (xhr) xhr.abort();
 
         var endTime = performance.now();
         var totalSeconds = (endTime - testStartTime) / 1000;
-        var avgMbps = (totalBytesDownloaded * 8) / (totalSeconds * 1000000);
+        var avgMbps = (totalBytes * 8) / (totalSeconds * 1000000);
 
         speedEl.textContent = avgMbps.toFixed(1);
         statusEl.textContent = "Complete";
@@ -649,7 +640,7 @@ document.getElementById("btn").addEventListener("click", function() {
         progressCircle.style.strokeDashoffset = "0";
         stopArcAnimation();
 
-        var totalMB = (totalBytesDownloaded / 1048576).toFixed(0);
+        var totalMB = (totalBytes / 1048576).toFixed(0);
         document.getElementById("stat-peak").textContent = peakSpeed.toFixed(1) + " Mbps";
         document.getElementById("stat-avg").textContent = avgMbps.toFixed(1) + " Mbps";
         document.getElementById("stat-low").textContent = (lowSpeed === Infinity ? "\u2014" : lowSpeed.toFixed(1) + " Mbps");
@@ -657,57 +648,54 @@ document.getElementById("btn").addEventListener("click", function() {
         statsRow.style.opacity = "1";
     }
 
-    function startStream() {
-        if (finished) return;
-
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", FILE_URL + "?s=" + Math.random() + "&t=" + Date.now(), true);
+    // Single connection download
+    function startDownload() {
+        xhr = new XMLHttpRequest();
+        xhr.open("GET", FILE_URL + "?cb=" + Date.now(), true);
         xhr.responseType = "arraybuffer";
 
-        var streamLoaded = 0;
+        var streamBytes = 0;
 
         xhr.onprogress = function(e) {
-            var newBytes = e.loaded - streamLoaded;
-            totalBytesDownloaded += newBytes;
-            streamLoaded = e.loaded;
+            var newBytes = e.loaded - streamBytes;
+            totalBytes += newBytes;
+            streamBytes = e.loaded;
             takeSample();
         };
 
         xhr.onload = function() {
-            var idx = activeXHRs.indexOf(xhr);
-            if (idx > -1) activeXHRs.splice(idx, 1);
-
-            // If time remains, start another download
-            if (!finished) {
-                startStream();
-            }
+            // File completed before time was up — start another
+            if (!finished) startDownload();
         };
 
         xhr.onerror = function() {
-            var idx = activeXHRs.indexOf(xhr);
-            if (idx > -1) activeXHRs.splice(idx, 1);
-            if (!finished && activeXHRs.length === 0) {
-                finishTest();
+            if (!finished) {
+                statusEl.textContent = "Error - download failed";
+                statusEl.classList.remove("active");
+                speedEl.textContent = "\u2014";
+                speedEl.classList.add("idle");
+                btn.disabled = false;
+                btn.classList.remove("testing");
+                btn.textContent = "GO";
+                progressRing.classList.remove("active");
+                stopArcAnimation();
+                finished = true;
             }
         };
 
-        activeXHRs.push(xhr);
         xhr.send();
     }
 
-    // Start multiple parallel streams
-    for (var i = 0; i < concurrentStreams; i++) {
-        startStream();
-    }
+    startDownload();
 
     // End test after TEST_DURATION
     setTimeout(finishTest, TEST_DURATION);
 
-    // Update progress ring smoothly
+    // Smooth progress updates
     var progressInterval = setInterval(function() {
         if (finished) { clearInterval(progressInterval); return; }
-        updateProgress();
-    }, 100);
+        takeSample();
+    }, 200);
 });
 
 // ============ INIT ============
